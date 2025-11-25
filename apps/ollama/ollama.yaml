@@ -1,4 +1,3 @@
-mkdir -p apps/ollama
 apiVersion: v1
 kind: Namespace
 metadata:
