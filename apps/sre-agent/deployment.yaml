@@ -13,15 +13,22 @@ spec:
       labels:
         app: sre-agent
     spec:
-      serviceAccountName: sre-agent-sa # 关联ServiceAccount
+      serviceAccountName: sre-agent-sa
       containers:
       - name: agent
-        image: sre-agent:v1.0 # 使用我们本地构建的镜像
-        imagePullPolicy: IfNotPresent # 关键！强制使用本地镜像
+        image: sre-agent:v1.0
+        imagePullPolicy: IfNotPresent
         volumeMounts:
-        - mountPath: "apps/sre-agent/agent-data"
+        - mountPath: "/app/data"
           name: agent-data
-    volumes:
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+      volumes:
       - name: agent-data
         persistentVolumeClaim:
           claimName: sre-agent-claim
