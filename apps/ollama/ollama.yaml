@@ -3,6 +3,44 @@ kind: Namespace
 metadata:
   name: ai-services
 ---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: ollama-model-pv
+  labels:
+    pvname: "ollama-model-pv"  # 添加标签供 PVC 选择
+spec:
+  capacity:
+    storage: 10Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: standard
+  mountOptions:
+    - hard
+    - nfsvers=4.1
+  nfs:
+    path: /NFSShare/ollama-models
+    server: 192.168.30.11  
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ollama-model-pvc
+  namespace: ai-services
+spec:
+  accessModes:
+    - ReadWriteOnce
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: standard
+  selector:
+    matchLabels:
+      pvname: "ollama-model-pv"
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -21,6 +59,45 @@ spec:
         image: ollama/ollama:latest
         ports:
         - containerPort: 11434
+        volumeMounts:
+        - name: model-storage
+          mountPath: /root/.ollama  # Ollama 默认存储路径
+        env:
+        - name: OLLAMA_HOST
+          value: "0.0.0.0"	# 允许外部访问
+        command:
+        - /bin/sh
+        - -c
+        - |
+          # 启动 ollama 服务
+          ollama serve &
+          
+          # 等待服务启动
+          echo "等待 Ollama 服务启动..."
+          sleep 30
+          
+          # 检查并拉取模型（如果不存在）
+          if ! ollama list | grep -q "qwen:0.5b"; then
+            echo "开始拉取模型 qwen:0.5b..."
+            ollama pull qwen:0.5b
+            echo "模型拉取完成"
+          else
+            echo "模型 qwen:0.5b 已存在"
+          fi
+          
+          # 保持容器运行
+          wait
+        resources:
+          requests:
+            memory: "4Gi"
+            cpu: "2"
+          limits:
+            memory: "8Gi"
+            cpu: "4"
+      volumes:
+      - name: model-storage
+        persistentVolumeClaim:
+          claimName: ollama-model-pvc
 ---
 apiVersion: v1
 kind: Service
@@ -33,3 +110,4 @@ spec:
   ports:
   - port: 11434
     targetPort: 11434
+    nodePort: 32341
